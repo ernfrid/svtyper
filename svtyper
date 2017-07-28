@@ -323,6 +323,8 @@ def write_sample_json(sample_list, lib_info_file):
             l['sd'] = lib.sd
             l['prevalence'] = lib.prevalence
             l['histogram'] = lib.hist
+            l['pp_histogram'] = lib.pp_hist
+            l['notpp_histogram'] = lib.notpp_hist
 
             s['libraryArray'].append(l)
 
@@ -584,7 +586,8 @@ class Library(object):
         # Each entry in valueCounts is a value, and its count is
         # the number of instances of that value observed in the dataset.
         # So valueCount[5] is the number of times 5 has been seen in the data.
-        valueCounts = Counter()
+        notpp_valueCounts = Counter()
+        pp_valueCounts = Counter()
         for read in self.bam.fetch():
             if skip_counter < skip:
                 skip_counter += 1
@@ -598,11 +601,15 @@ class Library(object):
                 or read.get_tag('RG') not in self.readgroups):
                 continue
             else:
-                valueCounts[read.template_length] += 1
+                if read.is_proper_pair:
+                    pp_valueCounts[read.template_length] += 1
+                else:
+                    notpp_valueCounts[read.template_length] += 1
                 counter += 1
             if counter == self.num_samp:
                 break
 
+        valueCounts = Counter(pp_valueCounts).update(notpp_valueCounts)
         if len(valueCounts) == 0:
             sys.stderr.write('Error: failed to build insert size histogram for paired-end reads.\n\
 Please ensure BAM file (%s) has inward facing, paired-end reads.\n' % self.bam.filename)
@@ -611,10 +618,13 @@ Please ensure BAM file (%s) has inward facing, paired-end reads.\n' % self.bam.f
         # remove outliers
         med = median(valueCounts)
         u_mad = upper_mad(valueCounts, med)
-        for x in [x for x in list(valueCounts) if x > med + mads * u_mad]:
-            del valueCounts[x]
+        for counter in pp_valueCounts, notpp_valueCounts, valueCounts:
+            for x in [x for x in list(counter) if x > med + mads * u_mad]:
+                del counter[x]
 
         self.hist = valueCounts
+        self.pp_hist = pp_valueCounts
+        self.notpp_hist = notpp_valueCounts
         self.mean = mean(self.hist)
         self.sd = stdev(self.hist)
 
