@@ -609,7 +609,8 @@ class Library(object):
             if counter == self.num_samp:
                 break
 
-        valueCounts = Counter(pp_valueCounts).update(notpp_valueCounts)
+        valueCounts = Counter(pp_valueCounts)
+        valueCounts.update(notpp_valueCounts)
         if len(valueCounts) == 0:
             sys.stderr.write('Error: failed to build insert size histogram for paired-end reads.\n\
 Please ensure BAM file (%s) has inward facing, paired-end reads.\n' % self.bam.filename)
@@ -618,9 +619,8 @@ Please ensure BAM file (%s) has inward facing, paired-end reads.\n' % self.bam.f
         # remove outliers
         med = median(valueCounts)
         u_mad = upper_mad(valueCounts, med)
-        for counter in pp_valueCounts, notpp_valueCounts, valueCounts:
-            for x in [x for x in list(counter) if x > med + mads * u_mad]:
-                del counter[x]
+        for x in [x for x in list(valueCounts) if x > med + mads * u_mad]:
+            del valueCounts[x]
 
         self.hist = valueCounts
         self.pp_hist = pp_valueCounts
